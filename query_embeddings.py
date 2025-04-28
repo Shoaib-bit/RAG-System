@@ -27,8 +27,38 @@ def query_embeddings(index_dir="faiss_index"):
         if question.lower() == "exit":
             break
 
+        expanded = input("Would you like to use expanded mode? (yes/no): ").strip().lower() == "yes"
         # Search for relevant documents
-        results = vectordb.similarity_search(question, k=3)
+        if expanded:
+            print("Using expanded mode to generate more comprehensive answers...")
+            # Generate related queries using LLM
+            expansion_prompt = f"""
+            Given the user question: "{question}"
+            
+            Please generate 3 related but more specific questions that would help provide a comprehensive answer.
+            Return only the questions as a numbered list without any introduction or explanation.
+            """
+            
+            expansion_response = llm.invoke(expansion_prompt)
+            expanded_questions = [question] + [q.strip() for q in expansion_response.content.split('\n') if q.strip() and any(c.isdigit() for c in q[:2])]
+            
+            print(f"Generated {len(expanded_questions)-1} additional queries")
+            
+            # Collect results from all queries
+            all_results = []
+            seen_content = set()
+            
+            for q in expanded_questions:
+                q_results = vectordb.similarity_search(q, k=3)
+                for doc in q_results:
+                    # Deduplicate results
+                    if doc.page_content not in seen_content:
+                        all_results.append(doc)
+                        seen_content.add(doc.page_content)
+            
+            results = all_results
+        else:
+            results = vectordb.similarity_search(question, k=3)
 
         if results:
             # Prepare references for the prompt
@@ -74,6 +104,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Query document embeddings")
     parser.add_argument("--index", type=str, default="faiss_index",
                         help="Directory containing the embeddings")
+    parser.add_argument("--expanded", action="store_true",
+                        help="Use expanded mode to generate more comprehensive answers")
 
     args = parser.parse_args()
     query_embeddings(args.index)
