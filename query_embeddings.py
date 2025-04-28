@@ -17,7 +17,7 @@ def query_embeddings(index_dir="faiss_index"):
 
     # Load the vector database
     print(f"Loading embeddings from: {index_dir}")
-    vectordb = FAISS.load_local(index_dir, embeddings)
+    vectordb = FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
     print("Embeddings loaded successfully!")
 
     # Interactive query loop
