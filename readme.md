@@ -59,23 +59,35 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Place your PDF document(s) in the `docs/` folder
-2. Run the application:
+The system has two main scripts:
+
+1. **Create Embeddings**: Process documents and generate vector embeddings
+
    ```bash
-   python manage.py
+   python create_embeddings.py --input docs --output faiss_index
    ```
-3. Ask questions at the prompt
-4. Type 'exit' to quit the application
+
+   - `--input`: Path to directory containing documents or to a single document file (default: "docs")
+   - `--output`: Directory to save the embeddings (default: "faiss_index")
+
+2. **Query Embeddings**: Ask questions about your documents
+   ```bash
+   python query_embeddings.py --index faiss_index
+   ```
+   - `--index`: Directory containing the embeddings (default: "faiss_index")
+   - Type 'exit' to quit the application
 
 ## Project Structure
 
 ```
-manage.py              # Main application file
-requirements.txt       # Python dependencies
-docs/                  # Place PDF documents here
-faiss_index/           # Vector database storage
-  ├── index.faiss      # FAISS index file
-  └── index.pkl        # Pickle file for document metadata
+create_embeddings.py    # Script to process documents and create embeddings
+query_embeddings.py     # Script to query the embeddings and get answers
+requirements.txt        # Python dependencies
+docs/                   # Place PDF documents here
+faiss_index/            # Vector database storage
+  ├── index.faiss       # FAISS index file
+  └── index.pkl         # Pickle file for document metadata
+manage.py               # Deprecated main application file
 ```
 
 ## How It Works
