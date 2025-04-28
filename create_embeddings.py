@@ -40,6 +40,7 @@ def load_documents(directory_path: str) -> List[Any]:
         for file in files:
             file_path = os.path.join(root, file)
             file_ext = os.path.splitext(file_path)[1].lower()
+            file_name = os.path.basename(file_path)
 
             # Skip hidden files and unsupported formats
             if file.startswith('.'):
@@ -52,6 +53,13 @@ def load_documents(directory_path: str) -> List[Any]:
                     print(f"Loading {file_ext} file: {file_path}")
                     loader = loader_class(file_path)
                     documents = loader.load()
+                    
+                    # Add source filename to metadata
+                    for doc in documents:
+                        if not hasattr(doc, 'metadata'):
+                            doc.metadata = {}
+                        doc.metadata['source_file'] = file_name
+                    
                     all_documents.extend(documents)
                     print(f"Successfully loaded {len(documents)} document(s) from {file_path}")
                 else:
@@ -60,6 +68,13 @@ def load_documents(directory_path: str) -> List[Any]:
                         print(f"Attempting to load unknown file type: {file_path}")
                         loader = loader_mapping["default"](file_path)
                         documents = loader.load()
+                        
+                        # Add source filename to metadata
+                        for doc in documents:
+                            if not hasattr(doc, 'metadata'):
+                                doc.metadata = {}
+                            doc.metadata['source_file'] = file_name
+                        
                         all_documents.extend(documents)
                         print(f"Successfully loaded {len(documents)} document(s) from {file_path}")
                     except Exception as e:
@@ -84,6 +99,7 @@ def create_embeddings(input_path, output_dir="faiss_index"):
     else:
         # If it's a single file, determine the loader based on extension
         file_ext = os.path.splitext(input_path)[1].lower()
+        file_name = os.path.basename(input_path)
         loader_mapping = get_loader_mapping()
 
         if file_ext in loader_mapping:
@@ -95,6 +111,13 @@ def create_embeddings(input_path, output_dir="faiss_index"):
         try:
             loader = loader_class(input_path)
             documents = loader.load()
+            
+            # Add source filename to metadata
+            for doc in documents:
+                if not hasattr(doc, 'metadata'):
+                    doc.metadata = {}
+                doc.metadata['source_file'] = file_name
+                
             print(f"Successfully loaded {len(documents)} document(s)")
         except Exception as e:
             print(f"Error loading {input_path}: {str(e)}")

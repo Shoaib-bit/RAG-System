@@ -31,15 +31,21 @@ def query_embeddings(index_dir="faiss_index"):
         results = vectordb.similarity_search(question, k=3)
 
         if results:
-            context = "\n".join([d.page_content for d in results])
+            context_parts = []
+            for i, doc in enumerate(results):
+                source_file = doc.metadata.get('source_file', 'Unknown')
+                page_num = doc.metadata.get('page', 'N/A')
+                context_parts.append(f"[Document: {source_file}, Page: {page_num}, Chunk: {i+1}]\n{doc.page_content}")
+            
+            context = "\n\n".join(context_parts)
 
             prompt = f"""
-            Based on the following information from the document:
-            include citations in the format [page number] and [chunk number]
+            Based on the following information from the documents:
 
             {context}
 
             Please answer this question: {question}
+            Include citations in the format [Document: filename, Page: number, Chunk: number] when referencing specific information.
             """
 
             response = llm.invoke(prompt)
