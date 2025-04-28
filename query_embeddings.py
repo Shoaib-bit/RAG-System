@@ -31,13 +31,19 @@ def query_embeddings(index_dir="faiss_index"):
         results = vectordb.similarity_search(question, k=3)
 
         if results:
+            # Prepare references for the prompt
+            references = []
             context_parts = []
+            
             for i, doc in enumerate(results):
                 source_file = doc.metadata.get('source_file', 'Unknown')
                 page_num = doc.metadata.get('page', 'N/A')
-                context_parts.append(f"[Document: {source_file}, Page: {page_num}, Chunk: {i+1}]\n{doc.page_content}")
+                ref_id = f"[{i+1}]"
+                references.append(f"{ref_id} -> Document: {source_file}, Page: {page_num}, Chunk: {i+1}")
+                context_parts.append(f"{ref_id}\n{doc.page_content}")
             
             context = "\n\n".join(context_parts)
+            references_text = "\n".join(references)
 
             prompt = f"""
             Based on the following information from the documents:
@@ -45,7 +51,15 @@ def query_embeddings(index_dir="faiss_index"):
             {context}
 
             Please answer this question: {question}
-            Include citations in the format [Document: filename, Page: number, Chunk: number] when referencing specific information.
+
+            Follow these formatting rules in your answer:
+            1. When referencing information, use numbered citations like [1], [2], [3], etc.
+            2. After your answer, include a "References:" section that lists all sources you cited.
+            3. Make sure all citations in your answer correspond to entries in the references section.
+            4. Format each reference like this: [number] -> Document: filename, Page: number, Chunk: number
+
+            Here are the references you should use:
+            {references_text}
             """
 
             response = llm.invoke(prompt)
