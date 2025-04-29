@@ -72,9 +72,11 @@ The system has two main scripts:
 
 2. **Query Embeddings**: Ask questions about your documents
    ```bash
-   python query_embeddings.py --index faiss_index
+   python query_embeddings.py --index faiss_index [--expanded] [--mmr]
    ```
    - `--index`: Directory containing the embeddings (default: "faiss_index")
+   - `--expanded`: Enable expanded mode to generate more comprehensive answers by creating additional related queries
+   - `--mmr`: Use Maximum Marginal Relevance search for more diverse results with reduced redundancy
    - Type 'exit' to quit the application
 
 ## Project Structure

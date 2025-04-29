@@ -6,7 +6,7 @@ from langchain_community.vectorstores import FAISS
 import os
 import argparse
 
-def query_embeddings(index_dir="faiss_index"):
+def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False):
     """Query embeddings and ask questions."""
     load_dotenv()
 
@@ -27,7 +27,6 @@ def query_embeddings(index_dir="faiss_index"):
         if question.lower() == "exit":
             break
 
-        expanded = input("Would you like to use expanded mode? (yes/no): ").strip().lower() == "yes"
         # Search for relevant documents
         if expanded:
             print("Using expanded mode to generate more comprehensive answers...")
@@ -49,7 +48,10 @@ def query_embeddings(index_dir="faiss_index"):
             seen_content = set()
             
             for q in expanded_questions:
-                q_results = vectordb.similarity_search(q, k=3)
+                if mmr:
+                    q_results = vectordb.max_marginal_relevance_search(q, k=3, fetch_k=10)
+                else:
+                    q_results = vectordb.similarity_search(q, k=3)
                 for doc in q_results:
                     # Deduplicate results
                     if doc.page_content not in seen_content:
@@ -58,7 +60,11 @@ def query_embeddings(index_dir="faiss_index"):
             
             results = all_results
         else:
-            results = vectordb.similarity_search(question, k=3)
+            if mmr:
+                print("Using MMR search for maximum relevance and diversity...")
+                results = vectordb.max_marginal_relevance_search(question, k=3, fetch_k=10)
+            else:
+                results = vectordb.similarity_search(question, k=3)
 
         if results:
             # Prepare references for the prompt
@@ -106,6 +112,8 @@ if __name__ == "__main__":
                         help="Directory containing the embeddings")
     parser.add_argument("--expanded", action="store_true",
                         help="Use expanded mode to generate more comprehensive answers")
+    parser.add_argument("--mmr", action="store_true",
+                        help="Use Maximum Marginal Relevance for more diverse search results")
 
     args = parser.parse_args()
-    query_embeddings(args.index)
+    query_embeddings(args.index, args.expanded, args.mmr)
