@@ -2,11 +2,12 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI  # type: ignore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings  # type: ignore
 from langchain_community.vectorstores import FAISS
+from sentence_transformers import CrossEncoder
 
 import os
 import argparse
 
-def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False):
+def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=False, rerank_model="cross-encoder/ms-marco-MiniLM-L-6-v2"):
     """Query embeddings and ask questions."""
     load_dotenv()
 
@@ -14,6 +15,13 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False):
     llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
     embeddings = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001")
+    
+    # Initialize CrossEncoder for reranking if enabled
+    cross_encoder = None
+    if rerank:
+        print(f"Loading CrossEncoder model: {rerank_model}")
+        cross_encoder = CrossEncoder(rerank_model)
+        print("CrossEncoder model loaded successfully!")
 
     # Load the vector database
     print(f"Loading embeddings from: {index_dir}")
@@ -66,6 +74,12 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False):
             else:
                 results = vectordb.similarity_search(question, k=3)
 
+        if rerank and results:
+            print("Reranking results using CrossEncoder...")
+            rerank_inputs = [(question, doc.page_content) for doc in results]
+            rerank_scores = cross_encoder.predict(rerank_inputs)
+            results = [doc for _, doc in sorted(zip(rerank_scores, results), key=lambda x: x[0], reverse=True)]
+
         if results:
             # Prepare references for the prompt
             references = []
@@ -114,6 +128,10 @@ if __name__ == "__main__":
                         help="Use expanded mode to generate more comprehensive answers")
     parser.add_argument("--mmr", action="store_true",
                         help="Use Maximum Marginal Relevance for more diverse search results")
+    parser.add_argument("--rerank", action="store_true",
+                        help="Use CrossEncoder for reranking search results")
+    parser.add_argument("--rerank_model", type=str, default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+                        help="CrossEncoder model to use for reranking")
 
     args = parser.parse_args()
-    query_embeddings(args.index, args.expanded, args.mmr)
+    query_embeddings(args.index, args.expanded, args.mmr, args.rerank, args.rerank_model)
