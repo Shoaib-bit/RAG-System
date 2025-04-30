@@ -17,17 +17,20 @@ def get_llm(provider=None, model=None):
 
     # Initialize the appropriate LLM based on provider
     if provider == "google":
-        model = model or os.getenv("GOOGLE_MODEL", "gemini-2.0-flash")
+        if not model:
+            model = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash")
         return ChatGoogleGenerativeAI(model=model)
     elif provider == "openai":
         if not os.getenv("OPENAI_API_KEY"):
             raise ValueError("OpenAI API key not found. Please set OPENAI_API_KEY in your .env file.")
-        model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
+        if not model:
+            model = os.getenv("OPENAI_MODEL", "gpt-4o")
         return ChatOpenAI(model=model)
     elif provider == "anthropic":
         if not os.getenv("ANTHROPIC_API_KEY"):
             raise ValueError("Anthropic API key not found. Please set ANTHROPIC_API_KEY in your .env file.")
-        model = model or os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229")
+        if not model:
+            model = os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229")
         return ChatAnthropic(model=model)
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}. Supported providers are 'google', 'openai', and 'anthropic'.")
@@ -40,7 +43,18 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
     # Initialize LLM and embeddings
     try:
         llm = get_llm(provider, model)
-        print(f"Using {provider or os.getenv('LLM_PROVIDER', 'google')} with model: {model or 'default'}")
+        # Get the actual model being used for display
+        actual_provider = provider or os.getenv('LLM_PROVIDER', 'google')
+        actual_model = model
+        if not actual_model:
+            if actual_provider == "google":
+                actual_model = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash")
+            elif actual_provider == "openai":
+                actual_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+            elif actual_provider == "anthropic":
+                actual_model = os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229")
+                
+        print(f"Using {actual_provider} with model: {actual_model}")
     except ValueError as e:
         print(f"Error initializing LLM: {str(e)}")
         return
