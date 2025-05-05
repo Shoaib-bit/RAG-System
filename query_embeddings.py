@@ -5,6 +5,8 @@ from langchain_community.vectorstores import FAISS
 from sentence_transformers import CrossEncoder
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import LLMChainExtractor
 
 import os
 import argparse
@@ -36,7 +38,8 @@ def get_llm(provider=None, model=None):
         raise ValueError(f"Unsupported LLM provider: {provider}. Supported providers are 'google', 'openai', and 'anthropic'.")
 
 def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=False,
-                    rerank_model="cross-encoder/ms-marco-MiniLM-L-6-v2", provider=None, model=None):
+                    rerank_model="cross-encoder/ms-marco-MiniLM-L-6-v2", provider=None, model=None, 
+                    use_compression=False):
     """Query embeddings and ask questions."""
     load_dotenv()
 
@@ -74,6 +77,16 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
     vectordb = FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
     print("Embeddings loaded successfully!")
 
+    # Setup compression if enabled
+    if use_compression:
+        print("Using document compression to extract most relevant content...")
+        compressor = LLMChainExtractor.from_llm(llm)
+        retriever = vectordb.as_retriever()
+        compression_retriever = ContextualCompressionRetriever(
+            base_compressor=compressor,
+            base_retriever=retriever
+        )
+
     # Interactive query loop
     print("\nEnter 'exit' to quit the program")
     while True:
@@ -102,7 +115,9 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
             seen_content = set()
 
             for q in expanded_questions:
-                if mmr:
+                if use_compression:
+                    q_results = compression_retriever.invoke(q)
+                elif mmr:
                     q_results = vectordb.max_marginal_relevance_search(q, k=3, fetch_k=10)
                 else:
                     q_results = vectordb.similarity_search(q, k=3)
@@ -114,7 +129,10 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
 
             results = all_results
         else:
-            if mmr:
+            if use_compression:
+                print("Retrieving and compressing documents...")
+                results = compression_retriever.invoke(question)
+            elif mmr:
                 print("Using MMR search for maximum relevance and diversity...")
                 results = vectordb.max_marginal_relevance_search(question, k=3, fetch_k=10)
             else:
@@ -182,7 +200,9 @@ if __name__ == "__main__":
                         help="LLM provider to use (google, openai, or anthropic)")
     parser.add_argument("--model", type=str,
                         help="Specific model to use with the chosen provider")
+    parser.add_argument("--compression", action="store_true",
+                        help="Use document compression to extract most relevant content")
 
     args = parser.parse_args()
     query_embeddings(args.index, args.expanded, args.mmr, args.rerank, args.rerank_model,
-                    args.provider, args.model)
+                    args.provider, args.model, args.compression)
