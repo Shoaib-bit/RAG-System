@@ -7,6 +7,8 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
+from langchain.chains import RetrievalQA
+from langchain.prompts import PromptTemplate
 
 import os
 import argparse
@@ -39,7 +41,7 @@ def get_llm(provider=None, model=None):
 
 def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=False,
                     rerank_model="cross-encoder/ms-marco-MiniLM-L-6-v2", provider=None, model=None, 
-                    use_compression=False):
+                    use_compression=False, use_retrieval_qa=False):
     """Query embeddings and ask questions."""
     load_dotenv()
 
@@ -77,14 +79,48 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
     vectordb = FAISS.load_local(index_dir, embeddings, allow_dangerous_deserialization=True)
     print("Embeddings loaded successfully!")
 
+    # Setup retriever based on options
+    if mmr:
+        retriever = vectordb.as_retriever(search_type="mmr", search_kwargs={"k": 3, "fetch_k": 10})
+    else:
+        retriever = vectordb.as_retriever(search_kwargs={"k": 3})
+
     # Setup compression if enabled
     if use_compression:
         print("Using document compression to extract most relevant content...")
         compressor = LLMChainExtractor.from_llm(llm)
-        retriever = vectordb.as_retriever()
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=compressor,
             base_retriever=retriever
+        )
+        retriever = compression_retriever
+
+    # Setup RetrievalQA chain if enabled
+    retrieval_qa_chain = None
+    if use_retrieval_qa:
+        print("Setting up RetrievalQA chain...")
+        prompt_template = """
+        Answer the question based on the context below. 
+        
+        Context:
+        {context}
+        
+        Question: {question}
+        
+        Please provide a detailed answer with citations to the source documents in the format [1], [2], etc.
+        After your answer, include a "References:" section listing all cited sources.
+        """
+        PROMPT = PromptTemplate(
+            template=prompt_template, 
+            input_variables=["context", "question"]
+        )
+        
+        retrieval_qa_chain = RetrievalQA.from_chain_type(
+            llm=llm,
+            chain_type="stuff",
+            retriever=retriever,
+            return_source_documents=True,
+            chain_type_kwargs={"prompt": PROMPT}
         )
 
     # Interactive query loop
@@ -94,6 +130,28 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
         if question.lower() == "exit":
             break
 
+        if use_retrieval_qa:
+            # Use RetrievalQA chain for answering
+            result = retrieval_qa_chain.invoke({"query": question})
+            
+            answer = result["result"]
+            source_docs = result["source_documents"]
+            
+            # Format references
+            references = []
+            for i, doc in enumerate(source_docs):
+                source_file = doc.metadata.get('source_file', 'Unknown')
+                page_num = doc.metadata.get('page', 'N/A')
+                references.append(f"[{i+1}] -> Document: {source_file}, Page: {page_num}, Chunk: {i+1}")
+            
+            # Add references if not already included
+            if "References:" not in answer:
+                answer += "\n\nReferences:\n" + "\n".join(references)
+            
+            print("\nAnswer:")
+            print(answer)
+            continue
+            
         # Search for relevant documents
         if expanded:
             print("Using expanded mode to generate more comprehensive answers...")
@@ -116,7 +174,7 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
 
             for q in expanded_questions:
                 if use_compression:
-                    q_results = compression_retriever.invoke(q)
+                    q_results = retriever.invoke(q)
                 elif mmr:
                     q_results = vectordb.max_marginal_relevance_search(q, k=3, fetch_k=10)
                 else:
@@ -131,7 +189,7 @@ def query_embeddings(index_dir="faiss_index", expanded=False, mmr=False, rerank=
         else:
             if use_compression:
                 print("Retrieving and compressing documents...")
-                results = compression_retriever.invoke(question)
+                results = retriever.invoke(question)
             elif mmr:
                 print("Using MMR search for maximum relevance and diversity...")
                 results = vectordb.max_marginal_relevance_search(question, k=3, fetch_k=10)
@@ -202,7 +260,9 @@ if __name__ == "__main__":
                         help="Specific model to use with the chosen provider")
     parser.add_argument("--compression", action="store_true",
                         help="Use document compression to extract most relevant content")
+    parser.add_argument("--retrieval-qa", action="store_true",
+                        help="Use RetrievalQA chain for answering questions")
 
     args = parser.parse_args()
     query_embeddings(args.index, args.expanded, args.mmr, args.rerank, args.rerank_model,
-                    args.provider, args.model, args.compression)
+                    args.provider, args.model, args.compression, args.retrieval_qa)
