@@ -92,7 +92,7 @@ The system has two main scripts:
 
 2. **Query Embeddings**: Ask questions about your documents
    ```bash
-   python query_embeddings.py --index faiss_index [--expanded] [--mmr] [--rerank] [--rerank_model MODEL_NAME] [--provider PROVIDER] [--model MODEL_NAME]
+   python query_embeddings.py --index faiss_index [--expanded] [--mmr] [--rerank] [--rerank_model MODEL_NAME] [--provider PROVIDER] [--model MODEL_NAME] [--compression] [--retrieval-qa]
    ```
    - `--index`: Directory containing the embeddings (default: "faiss_index")
    - `--expanded`: Enable expanded mode to generate more comprehensive answers by creating additional related queries
@@ -101,6 +101,8 @@ The system has two main scripts:
    - `--rerank_model`: Specify which CrossEncoder model to use (default: "cross-encoder/ms-marco-MiniLM-L-6-v2")
    - `--provider`: Specify which LLM provider to use: "google", "openai", or "anthropic" (overrides .env setting)
    - `--model`: Specify a specific model to use with the chosen provider (overrides .env setting)
+   - `--compression`: Use document compression to extract the most relevant content from retrieved documents
+   - `--retrieval-qa`: Use LangChain's RetrievalQA chain for structured question answering with detailed references
    - Type 'exit' to quit the application
 
 ## Project Structure
